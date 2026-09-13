@@ -1,0 +1,26 @@
+# TubeScribe configuration — copy to config.toml and adjust.
+
+[watchlist]
+# Markdown file with one link per line: "- [ ] https://www.youtube.com/watch?v=..."
+# Processed lines are rewritten as "- [x] <url> → [[note]] (date)".
+file = "youtube.md"
+
+[output]
+# Where the generated markdown notes go (e.g. your Obsidian vault's raw/ folder).
+dir = "output"
+
+[whisper]
+model = "medium"        # tiny | base | small | medium | large-v3
+device = "auto"         # auto (cuda then cpu fallback) | cuda | cpu
+compute_type = "auto"   # auto | float16 | int8
+# hf_home = "D:/Cache/huggingface"  # optional: reuse an existing model cache
+
+[summary]
+mode = "api"            # api (Anthropic SDK) | claude-cli (claude -p) | none
+model = "claude-opus-4-8"
+language = "fr"
+# api_key = "sk-ant-..."  # optional; otherwise ANTHROPIC_API_KEY env var is used
+
+[download]
+keep_media = false      # true: keep audio files under <output>/media/<id>/
+cookies_browser = ""    # edge | chrome | firefox — for age/region-restricted videos

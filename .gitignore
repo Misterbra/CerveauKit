@@ -1,0 +1,6 @@
+**/.obsidian/workspace*
+.trash/
+__pycache__/
+*.pyc
+tools/tubescribe/config.toml
+raw/youtube/.tubescribe-state.json
