@@ -1,10 +1,5 @@
 ---
-description: Ingérer une source depuis raw/ dans le wiki
-argument-hint: <nom-du-fichier dans raw/>
+description: Classer une source désignée dans le cerveau
+argument-hint: fichier dans raw/
 ---
-
-Ingère la source : $ARGUMENTS
-
-Suis exactement le workflow « Ingérer une source » de CLAUDE.md : lecture, discussion si nécessaire, page(s) wiki avec frontmatter, mise à jour des pages liées, index.md, questions-ouvertes.md, log.md, commit git.
-
-Si $ARGUMENTS est vide : liste les fichiers de raw/ absents de l'index et propose lequel traiter.
+Classe la source $ARGUMENTS selon CLAUDE.md. Sans argument, liste les sources et demande laquelle classer. Aucun téléchargement ni accès à un autre dossier.

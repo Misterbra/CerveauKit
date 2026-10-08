@@ -1,39 +1,35 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
-
-
+from .watchlist import video_id
 class DownloadError(RuntimeError):
     pass
-
-
-def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if proc.returncode != 0:
-        detail = proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else f"échec : {cmd[0]}"
-        raise DownloadError(detail)
-
-
-def fetch_audio(url: str, workdir: Path, cookies_browser: str = "") -> tuple[Path, dict]:
-    """Télécharge l'audio + métadonnées ; renvoie (wav 16 kHz mono, info dict yt-dlp)."""
+def _run(cmd):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1200)
+    except FileNotFoundError as exc:
+        raise DownloadError("Outil vidéo absent. Relancez INSTALLER-VIDEOS.cmd.") from exc
+    if p.returncode:
+        raise DownloadError("Échec du téléchargement ou de la conversion. Vérifiez la disponibilité de la vidéo et les outils installés.")
+def fetch_audio(url: str, workdir: Path):
+    vid = video_id(url)
+    if not vid:
+        raise ValueError("URL YouTube invalide.")
     workdir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        "yt-dlp", "--no-playlist", "--no-warnings",
-        "-f", "bestaudio/best",
-        "--write-info-json",
-        "-o", str(workdir / "media.%(ext)s"),
-        url,
-    ]
-    if cookies_browser:
-        cmd[1:1] = ["--cookies-from-browser", cookies_browser]
-    _run(cmd)
-
-    info_path = next(workdir.glob("media.info.json"), None)
-    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path else {}
-    media = next((p for p in workdir.glob("media.*") if p.suffix != ".json"), None)
-    if media is None:
-        raise DownloadError("aucun fichier audio téléchargé")
-
+    _run([sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-plugin-dirs",
+          "--no-playlist", "--js-runtimes", "deno", "--socket-timeout", "30",
+          "--retries", "2", "--max-filesize", "256M",
+          "--match-filter", "!is_live & duration <= 7200", "-f", "bestaudio/best",
+          "--write-info-json", "-o", str(workdir / "media.%(ext)s"),
+          "--", "https://www.youtube.com/watch?v=" + vid])
+    info_path = workdir / "media.info.json"
+    if not info_path.exists():
+        raise DownloadError("Vidéo indisponible, en direct ou supérieure à la limite de deux heures.")
+    info = json.loads(info_path.read_text(encoding="utf-8"))
+    media = next((p for p in workdir.glob("media.*") if p.suffix not in (".json", ".part", ".ytdl")), None)
+    if not media:
+        raise DownloadError("Aucun fichier audio complet.")
     wav = workdir / "audio.wav"
-    _run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(media), "-vn", "-ar", "16000", "-ac", "1", str(wav)])
+    _run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", str(media), "-vn", "-ar", "16000", "-ac", "1", str(wav)])
     return wav, info

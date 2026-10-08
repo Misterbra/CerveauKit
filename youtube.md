@@ -1,4 +1,5 @@
-# YouTube — à traiter
+# Vidéos à traiter — option facultative
 
-Ajoute un lien par ligne au format `- [ ] https://...`, puis lance `/youtube`. Chaque vidéo traitée est cochée automatiquement avec un lien vers sa note dans `raw/youtube/`.
-
+Ajoutez une ligne avec une case vide et l’URL d’une vidéo que vous êtes autorisé à traiter.
+Format : - [ ] URL_DE_LA_VIDEO
+Aucun traitement automatique : lancez TRAITER-VIDEOS.cmd quand vous le souhaitez.

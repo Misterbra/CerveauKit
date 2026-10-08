@@ -1,5 +1,3 @@
-# Index
+# Index du cerveau
 
-Une ligne par page : `- [[slug]] — résumé en une phrase`
-
-*(vide — le wiki attend sa première source)*
+- [Exemple : préparer une proposition](wiki/exemple-proposition.md) — démonstration fictive rédigée à l’avance, source : raw/exemple-atelier.md.

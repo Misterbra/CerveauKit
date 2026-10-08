@@ -1,3 +1,3 @@
-yt-dlp
-faster-whisper>=1.0
-anthropic>=0.66
+-c constraints-windows-py312.txt
+yt-dlp[default]>=2026.1.1,<2027
+faster-whisper>=1.2,<2

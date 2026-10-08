@@ -1,7 +1,4 @@
 ---
-description: Vérifier la cohérence du wiki (orphelines, contradictions, périmé)
+description: Vérifier les sources et les liens des fiches
 ---
-
-Passe le wiki au lint en suivant le workflow « Lint » de CLAUDE.md : pages orphelines, contradictions entre pages, pages en statut a-verifier ou anciennes, liens [[...]] cassés, index périmé.
-
-Présente les problèmes trouvés, propose les corrections, applique celles que je valide, puis entrée dans log.md + commit.
+Vérifie les références et contradictions selon CLAUDE.md. Signale toute source retirée ou périmée. Propose les corrections.

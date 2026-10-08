@@ -1,114 +1,61 @@
+import json
 import re
-import shutil
 import tempfile
-import unicodedata
 from datetime import date
 from pathlib import Path
+from . import downloader, state, transcriber, watchlist
 
-from . import downloader, state, summarizer, transcriber, watchlist
-from .config import Config
-
-
-def _slug(text: str, maxlen: int = 60) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^\w\s-]", "", text).strip().lower()
-    text = re.sub(r"[\s_]+", "-", text)
-    return text[:maxlen].rstrip("-") or "video"
-
-
-def _ts(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
+def _ts(n):
+    m, s = divmod(int(n), 60)
     h, m = divmod(m, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
+def _render(cfg, vid, record, summary=None):
+    transcript_path = cfg.output_dir / f"{vid}.transcript.md"
+    transcript = transcript_path.read_text(encoding="utf-8")
+    title = str(record["titre"]).replace("\n", " ")
+    lines = ["---", "source: youtube", f'url: {record["url"]}',
+             f"titre: {json.dumps(title, ensure_ascii=False)}", "statut: brut", "---",
+             f"# {title}", "",
+             summary or "_Transcription disponible ; aucun résumé généré._", "",
+             "## Transcription", "", transcript]
+    state.atomic_write(cfg.output_dir / f"{vid}.md", "\n".join(lines) + "\n")
 
-def process_url(url: str, cfg: Config, no_summary: bool = False) -> str | None:
-    """Traite une vidéo ; renvoie le nom de la note créée (sans .md), ou None."""
+def process_url(url, cfg):
     vid = watchlist.video_id(url)
     if not vid:
-        print(f"  ! URL non reconnue comme vidéo YouTube : {url}")
-        return None
+        raise ValueError("URL invalide.")
     st = state.load(cfg.state_file)
-    if vid in st:
-        print(f"  = déjà traitée ({st[vid]['note']})")
-        return None
-
-    tmp = Path(tempfile.mkdtemp(prefix=f"tubescribe-{vid}-"))
-    try:
-        print("  - téléchargement audio…")
-        wav, info = downloader.fetch_audio(url, tmp, cfg.cookies_browser)
-        title = info.get("title") or vid
-        channel = info.get("uploader") or info.get("channel") or "?"
-
-        print("  - transcription Whisper…")
-        segments, lang = transcriber.transcribe(
-            wav, cfg.whisper_model, cfg.whisper_device, cfg.whisper_compute
-        )
-        transcript = "\n".join(f"[{_ts(s)}-{_ts(e)}] {t}" for s, e, t in segments)
-
-        summary = None
-        if not no_summary:
-            print(f"  - résumé ({cfg.summary_mode})…")
-            summary = summarizer.summarize(
-                transcript, title, channel, cfg.summary_mode, cfg.summary_model,
-                cfg.summary_language, cfg.summary_api_key,
-            )
-
-        note_name = f"{vid}-{_slug(title)}"
-        note_path = cfg.output_dir / f"{note_name}.md"
-        cfg.output_dir.mkdir(parents=True, exist_ok=True)
-        today = date.today().isoformat()
-        dur = info.get("duration")
-        safe_title = title.replace('"', "'")
-        fm = [
-            "---",
-            "source: youtube",
-            f"url: {url}",
-            f"video_id: {vid}",
-            f'titre: "{safe_title}"',
-            f'chaine: "{channel}"',
-            f"duree: {_ts(dur) if dur else '?'}",
-            f"publiee: {info.get('upload_date', '?')}",
-            f"traitee: {today}",
-            f"langue: {lang}",
-            "tags: [youtube]",
-            "statut: brut",
-            "---",
-        ]
-        body = [f"# {title}", ""]
-        if summary:
-            body += [summary, ""]
-        body += ["## Transcription", "", transcript, ""]
-        note_path.write_text("\n".join(fm + [""] + body), encoding="utf-8")
-
-        st[vid] = {"url": url, "titre": title, "note": note_name, "date": today}
+    if vid in st and (cfg.output_dir / f"{vid}.md").exists():
+        print("Déjà transcrite. Ouvrez votre assistant pour la résumer.")
+        return vid
+    if vid not in st or not (cfg.output_dir / f"{vid}.transcript.md").exists():
+        with tempfile.TemporaryDirectory(prefix="cerveau-video-") as temp:
+            wav, info = downloader.fetch_audio(url, Path(temp))
+            segments, lang = transcriber.transcribe(wav, cfg.whisper_model, cfg.whisper_device, cfg.whisper_compute)
+        transcript = "\n".join(f"[{_ts(s)}–{_ts(e)}] {t}" for s, e, t in segments)
+        if not transcript.strip():
+            raise RuntimeError("Transcription vide. Vidéo laissée en attente.")
+        state.atomic_write(cfg.output_dir / f"{vid}.transcript.md", transcript)
+        st[vid] = {"url": "https://www.youtube.com/watch?v="+vid,
+                   "titre": str(info.get("title") or vid), "channel": str(info.get("uploader") or ""),
+                   "note": vid, "date": date.today().isoformat(), "langue": lang, "summary": "pending"}
         state.save(cfg.state_file, st)
-        print(f"  + note : {note_path}")
-        return note_name
-    finally:
-        if cfg.keep_media:
-            keep_dir = cfg.output_dir / "media" / vid
-            keep_dir.parent.mkdir(parents=True, exist_ok=True)
-            if not keep_dir.exists():
-                shutil.move(str(tmp), str(keep_dir))
-        else:
-            shutil.rmtree(tmp, ignore_errors=True)
+    record = st[vid]
+    _render(cfg, vid, record)
+    return vid
 
-
-def watch(cfg: Config, no_summary: bool = False) -> list[str]:
+def watch(cfg):
     entries = watchlist.pending_entries(cfg.watchlist_file)
-    if not entries:
-        print("Rien à traiter — aucune vidéo en attente dans la watchlist.")
-        return []
-    created: list[str] = []
-    for e in entries:
-        print(f"> {e.url}")
-        note = process_url(e.url, cfg, no_summary)
-        if note:
-            watchlist.mark_done(cfg.watchlist_file, e, note, date.today().isoformat())
-            created.append(note)
-        else:
-            st = state.load(cfg.state_file)
-            if e.video_id in st:  # déjà traitée : coche quand même la ligne
-                watchlist.mark_done(cfg.watchlist_file, e, st[e.video_id]["note"], st[e.video_id]["date"])
-    return created
+    failures = 0
+    for entry in entries:
+        try:
+            note = process_url(entry.url, cfg)
+            watchlist.mark_done(cfg.watchlist_file, entry, note, date.today().isoformat())
+            print(f"Note prête : {note}.md")
+        except Exception as exc:
+            failures += 1
+            print(f"Vidéo {entry.video_id} : {exc}")
+    print(f"{len(entries)-failures} vidéo(s) traitée(s), {failures} échec(s).")
+    if failures:
+        raise RuntimeError("Lot incomplet. Les transcriptions déjà obtenues sont conservées. Relancez le lot pour retenter les téléchargements échoués.")

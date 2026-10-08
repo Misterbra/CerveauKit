@@ -1,79 +1,35 @@
-# TubeScribe
+# TubeScribe — transcription locale à la demande
+Version 1.1.0. Le script télécharge l’audio de liens YouTube autorisés, transcrit avec Whisper et conserve une note Markdown avec repères horodatés. Il traite un lot puis s’arrête.
 
-Turn a markdown watchlist of YouTube links into transcribed, summarized, ready-to-file knowledge notes.
+## Installation Windows
+Depuis la racine du kit, lancez INSTALLER-VIDEOS.cmd. Le lanceur vérifie Python 3.12, FFmpeg et Deno, propose les outils manquants avec votre accord et installe les modules dans .venv. Le fichier de contraintes fixe 33 versions résolues pour Windows x64/Python 3.12. La résolution ne constitue pas un essai complet de transcription.
+La configuration créée garde des chemins relatifs. Le modèle Whisper se télécharge au premier usage ; le profil par défaut utilise le CPU.
 
-**Pipeline:** watchlist (`youtube.md`) → download audio (yt-dlp) → transcribe (faster-whisper, GPU or CPU) → summarize (Claude) → one markdown note per video, with YAML frontmatter — then the watchlist line is checked off so nothing is ever processed twice.
+## Traitement
+Ajoutez une ligne dans youtube.md :
 
-Built to feed a personal knowledge vault (Obsidian, or any folder of markdown), but works standalone.
+    - [ ] https://www.youtube.com/watch?v=XXXXXXXXXXX
 
-## Requirements
+Remplacez XXXXXXXXXXX par un véritable identifiant vidéo. Lancez ensuite TRAITER-VIDEOS.cmd. La note et sa transcription restent dans raw/youtube/. La ligne est cochée après succès. Les autres vidéos continuent si une vidéo échoue ; le lot renvoie alors une erreur. Relancez pour retenter les liens non cochés.
+Pour résumer, ouvrez Claude Code ou Codex et demandez de résumer et classer la note en citant ses horodatages. Le script Python ne contacte aucun fournisseur IA de résumé et ne demande aucune clé API.
 
-- Python 3.11+
-- [ffmpeg](https://ffmpeg.org/) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) on PATH
-- `pip install -r requirements.txt`
-- For summaries: an Anthropic API key (`ANTHROPIC_API_KEY` or `ant auth login`), **or** the Claude Code CLI (`claude`) installed, **or** disable summaries (`mode = "none"`)
+## Commandes manuelles Windows
+Depuis la racine du kit :
 
-## Setup
+    .venv\Scripts\python.exe tools\setup.py
+    cd tools\tubescribe
+    ..\..\.venv\Scripts\python.exe -m tubescribe --config config.toml status
+    ..\..\.venv\Scripts\python.exe -m tubescribe --config config.toml watch
 
-```sh
-cp config.example.toml config.toml
-# edit paths: watchlist file + output dir
-```
+watch traite le lot une fois, sans surveillance permanente. status ne télécharge rien.
 
-## Usage
+## Limites et incidents
+Pas de direct, deux heures maximum et 256 Mo de média téléchargé. Utilisez uniquement des contenus autorisés. Les restrictions de YouTube peuvent bloquer un téléchargement ; aucun contournement ou import de cookies du navigateur.
+Un journal corrompu n’est pas écrasé. Gardez-le et restaurez une sauvegarde. Après un arrêt brutal, ne retirez raw/youtube/.run.lock qu’après avoir vérifié qu’aucun traitement ne tourne. Les modifications concurrentes de la liste sont signalées, sans les remplacer.
 
-```sh
-python -m tubescribe watch          # process every unchecked link in the watchlist
-python -m tubescribe add <url>      # append a link to the watchlist and process it
-python -m tubescribe process <url>  # one-off, without touching the watchlist
-python -m tubescribe status         # what's done, what's pending
-```
+## Migration depuis la première version
+Sauvegardez d’abord le dossier, notamment raw/youtube/ et config.toml. Le nouvel installateur demande avant de remplacer la configuration. Les anciens réglages summary/api_key ne servent plus : supprimez les clés de votre configuration après sauvegarde appropriée et gérez vos accès dans l’assistant choisi.
+Les anciennes notes avec un nom terminé par un titre ne sont pas renommées ni supprimées. Ne décochez pas tous les anciens liens : seuls les nouveaux liens non cochés doivent être traités. Si vous souhaitez retraiter une ancienne vidéo, archivez d’abord sa note ; la version 1.1 écrit IDENTIFIANT.md et IDENTIFIANT.transcript.md.
+Les anciennes commandes add, process et les résumés automatiques sont remplacés par youtube.md, watch et un résumé demandé dans l’assistant. Les anciens .bat restent des raccourcis vers les nouveaux lanceurs.
 
-Watchlist format — plain markdown checkboxes:
-
-```markdown
-# YouTube — to process
-- [ ] https://www.youtube.com/watch?v=XXXXXXXXXXX
-- [x] https://youtu.be/YYYYYYYYYYY → [[YYYYYYYYYYY-video-title]] (2026-07-17)
-```
-
-Already-processed videos are tracked by video ID in a state file (`.tubescribe-state.json` in the output dir), so re-adding a link is a no-op.
-
-## Output
-
-One note per video: `<video-id>-<slug>.md`
-
-```markdown
----
-source: youtube
-url: https://www.youtube.com/watch?v=...
-video_id: ...
-titre: "..."
-chaine: "..."
-duree: 12:34
-publiee: 20260101
-traitee: 2026-07-17
-langue: fr
-tags: [youtube]
-statut: brut
----
-
-# Title
-
-## TL;DR
-...
-
-## Points clés
-...
-
-## Transcription
-[0:00-0:04] ...
-```
-
-## Configuration
-
-See `config.example.toml`. Key options: Whisper model size/device (auto-falls back from CUDA to CPU), summary backend (`api` / `claude-cli` / `none`), summary language, browser cookies for restricted videos.
-
-## License
-
-MIT — part of [Cerveau Kit](../../README.md). See the repository's `LICENSE`.
+MIT — voir ../../LICENSE.

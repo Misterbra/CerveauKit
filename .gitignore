@@ -1,6 +1,13 @@
-**/.obsidian/workspace*
-.trash/
+.venv/
 __pycache__/
 *.pyc
-tools/tubescribe/config.toml
-raw/youtube/.tubescribe-state.json
+.env*
+**/config.toml
+**/.tubescribe-state.json
+**/.run.lock
+raw/youtube/
+
+# Repository tooling and local editor state
+/dist/
+**/.obsidian/workspace*
+.trash/
